@@ -1,0 +1,10 @@
+[
+   {
+      "vyOS": {
+         "hostname": "vyosrouter",
+         "address": "IP:PORT",
+         "user": "username",
+         "passwd": "nohack"
+      }
+   }
+]
