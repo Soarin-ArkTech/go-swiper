@@ -21,7 +21,7 @@ func vyBackup(vy BackupList) {
 	// Form New Connection & Ready to Input Commands
 	stdin, conn, err := sshNew(vy)
 	if err != nil {
-		fmt.Println("Our sshNew Func Died!!!!!!?!#")
+		log.Fatalln("PANIC: Unable to Create SSH Connection: ", err)
 	}
 
 	// mmmyeah commands
@@ -32,25 +32,26 @@ func vyBackup(vy BackupList) {
 	}
 
 	// Go through commands & execute
-	for _, cmd := range vyCmds {
+	for k, cmd := range vyCmds {
 		_, err := fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		if cmd == vyCmds[2] {
-			time.Sleep(time.Second * 2)
+		if k == len(vyCmds) {
+			break
 		}
+		break
 	}
 
 	// Create SCP Client using Existing SSH Connection
 	scpClient, err := scp.NewClientBySSH(conn)
 	if err != nil {
-		log.Fatal("FUCK We're unable to create our SCP Client!", err)
+		log.Fatal("FUCK We're unable to create our SCP Client! \n", err)
 	}
 
 	// Create the .txt for SCP to copy into
-	formattedConfig, err := os.Create("./" + vy.Hostname + "/" + vy.Hostname + "-" + dateParsed + ".txt")
+	formattedConfig, err := os.Create("./backups/" + vy.Hostname + "/" + vy.Hostname + "-" + dateParsed + ".txt")
 	if err != nil {
 		fmt.Println("We were unable to create the local .txt file for " + vy.Hostname)
 	}
@@ -59,7 +60,7 @@ func vyBackup(vy BackupList) {
 	ctx := context.Background()
 
 	// SCP Configs Over then Safely Close
-	err = scpClient.CopyFromRemote(ctx, formattedConfig, "/home/vyos/"+vy.Hostname+"-"+dateParsed+".txt")
+	err = scpClient.CopyFromRemote(ctx, formattedConfig, "/home/"+vy.User+"/"+vy.Hostname+"-"+dateParsed+".txt")
 	if err != nil {
 		fmt.Printf("Unable to Download via SCP, error reason: %v", err)
 	}
@@ -86,7 +87,7 @@ func sshNew(vy BackupList) (io.WriteCloser, *ssh.Client, error) {
 	// Connection Info
 	conn, err := ssh.Dial("tcp", vy.Address, config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("\nERROR: We were unable to connect to %v... ", vy.Hostname+"\n ")
 	}
 
 	// Create SSH Session
@@ -102,8 +103,8 @@ func sshNew(vy BackupList) (io.WriteCloser, *ssh.Client, error) {
 	}
 
 	// Output for session
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
+	//session.Stdout = os.Stdout
+	//session.Stderr = os.Stderr
 
 	// Shell starts a login shell on the remote host.
 	session.Shell()

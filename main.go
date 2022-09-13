@@ -11,6 +11,13 @@ func main() {
 	// Load config.json
 	backupList := loadConf()
 
+	// Create Backups Folder
+	_, err := os.ReadDir("./backups/")
+	if err != nil {
+		os.Mkdir("./backups/", 0777)
+		fmt.Println("Backups folder created.")
+	}
+
 	// Make worker group and set the value to # of routers
 	var holdup sync.WaitGroup
 	holdup.Add(len(backupList))
@@ -20,7 +27,7 @@ func main() {
 		fmt.Printf("%v is backing up!\n", v.Hostname)
 
 		// Make our directories if not made
-		os.Mkdir(v.Hostname, 0777)
+		os.Mkdir("./backups/"+v.Hostname, 0777)
 
 		// Anonymous function, each k starts a new goroutine for vyBackup
 		go func(k int) {
