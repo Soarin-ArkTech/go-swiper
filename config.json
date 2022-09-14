@@ -6,5 +6,12 @@
          "user": "username",
          "passwd": "nohack"
       }
-   }
+   },
+      {
+      "vyOS": {
+         "hostname": "vyosrouter2",
+         "address": "IP:PORT",
+         "user": "username",
+         "passwd": "nohack"
+      }
 ]
