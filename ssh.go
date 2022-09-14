@@ -39,9 +39,9 @@ func vyBackup(vy BackupList) {
 		}
 
 		if k == len(vyCmds) {
+			time.Sleep(time.Second * 2)
 			break
 		}
-		break
 	}
 
 	// Create SCP Client using Existing SSH Connection
