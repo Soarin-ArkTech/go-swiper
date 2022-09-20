@@ -1,38 +1,46 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 )
 
 func loadConf() []BackupList {
-	// Open JSON Config
-	jsonFile, err := os.Open("config.json")
+
+	// Open it UP G
+	conf, err := openConf()
 	if err != nil {
-		log.Fatalln("Couldn't open config.json!")
+		log.Fatal(err)
 	}
 
-	// Close at the End
-	defer jsonFile.Close()
+	// Create Variable Instance of BackupList Slice for our JSON
+	var OurList []BackupList
 
-	// Turn Read JSON into Bytes
-	byteMe, _ := ioutil.ReadAll(jsonFile)
-
-	// Buffer the output from the Json Formatting Func
-	var jsonBuff bytes.Buffer
-
-	// This is the struct we'll unmarshal into
-	var toStruct []BackupList
-	// Insert Formatted JSON to our Buffer
-	err = json.Indent(&jsonBuff, byteMe, "", "   ")
+	// Spit Formatted JSON out to Struct
+	err = json.Unmarshal(conf, &OurList)
 	if err != nil {
-		log.Fatalln("FUCK we couldn't parse the JSON!")
+
+		log.Fatal(err)
 	}
 
-	//Take our parsed JSON and install to structs
-	_ = json.Unmarshal(jsonBuff.Bytes(), &toStruct)
-	return toStruct
+	return OurList
+}
+
+func openConf() ([]byte, error) {
+	// Load File
+	BareFile, err := os.Open("config.json")
+	if err != nil {
+		log.Fatal("Couldn't find config.json!")
+	}
+	defer BareFile.Close()
+
+	// Read to Bytes
+	ConfBytes, err := io.ReadAll(BareFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return ConfBytes, err
 }

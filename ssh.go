@@ -12,89 +12,43 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func vyBackup(vy BackupList) {
+func parseDate() string {
+	timeDate := time.Now()
+	ParsedDate := timeDate.Format("01-02-2006")
 
-	// Get Date & Time for Filenames
-	date := time.Now()
-	dateParsed := date.Format("01-02-2006")
-
-	// Form New Connection & Ready to Input Commands
-	stdin, conn, err := sshNew(vy)
-	if err != nil {
-		log.Fatalln("PANIC: Unable to Create SSH Connection: ", err)
-	}
-
-	// mmmyeah commands
-	vyCmds := []string{
-		"source /opt/vyatta/etc/functions/script-template",
-		"run show conf commands >" + vy.Hostname + "-" + dateParsed + ".txt",
-		" ",
-	}
-
-	// Go through commands & execute
-	for k, cmd := range vyCmds {
-		_, err := fmt.Fprintf(stdin, "%s\n", cmd)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if k == len(vyCmds) {
-			time.Sleep(time.Second * 2)
-			break
-		}
-	}
-
-	// Create SCP Client using Existing SSH Connection
-	scpClient, err := scp.NewClientBySSH(conn)
-	if err != nil {
-		log.Fatal("FUCK We're unable to create our SCP Client! \n", err)
-	}
-
-	// Create the .txt for SCP to copy into
-	formattedConfig, err := os.Create("./backups/" + vy.Hostname + "/" + vy.Hostname + "-" + dateParsed + ".txt")
-	if err != nil {
-		fmt.Println("We were unable to create the local .txt file for " + vy.Hostname)
-	}
-
-	// honestly idk what this does, i got lucky by putting it here and somehow worked. note to self -> research contexts l8r
-	ctx := context.Background()
-
-	// SCP Configs Over then Safely Close
-	err = scpClient.CopyFromRemote(ctx, formattedConfig, "/home/"+vy.User+"/"+vy.Hostname+"-"+dateParsed+".txt")
-	if err != nil {
-		fmt.Printf("Unable to Download via SCP, error reason: %v", err)
-	}
-
-	scpClient.Close()
+	return ParsedDate
 }
 
-// Start a new SSH connection and return client & stdinpipe
-func sshNew(vy BackupList) (io.WriteCloser, *ssh.Client, error) {
+func SSHConnect(in Services) (*ssh.Client, io.WriteCloser, error) {
 
-	// Allow us to connect even if host is not in known_hosts file
-	hostKeyCallback := ssh.InsecureIgnoreHostKey()
+	// Pass our SSH Config
+	config := SSHConfig(in)
 
-	// Cient Config to load into SSH
-	config := &ssh.ClientConfig{
-		User: vy.User,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(vy.Passwd),
-		},
-
-		HostKeyCallback: hostKeyCallback,
-	}
-
-	// Connection Info
-	conn, err := ssh.Dial("tcp", vy.Address, config)
+	// Initiate Connection
+	conn, err := ssh.Dial("tcp", in.GrabAddress(), config)
 	if err != nil {
-		log.Fatalf("\nERROR: We were unable to connect to %v... ", vy.Hostname+"\n ")
+		log.Fatalf("\nERROR: We were unable to connect to %v... ", in, "\n ")
 	}
+
+	// Create Session & Input Pipe for Commands
+	stdin, err := SSHSession(conn)
+	if err != nil {
+		log.Fatalf("We were unble to create the SSH Session. Error: %s", err)
+	}
+
+	return conn, stdin, err
+}
+
+func SSHSession(client *ssh.Client) (io.WriteCloser, error) {
 
 	// Create SSH Session
-	session, err := conn.NewSession()
+	session, err := client.NewSession()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Close when done
+	// defer session.Close()
 
 	// StdinPipe for sending input (commands)
 	sshIn, err := session.StdinPipe()
@@ -102,20 +56,59 @@ func sshNew(vy BackupList) (io.WriteCloser, *ssh.Client, error) {
 		log.Fatal(err)
 	}
 
-	// Output for session
-	//session.Stdout = os.Stdout
-	//session.Stderr = os.Stderr
-
 	// Shell starts a login shell on the remote host.
 	session.Shell()
 
-	// Modify our Terminal SSH Mode (its default rn, but putting this here if I want to add flags)
-	sshMode := ssh.TerminalModes{
-		ssh.ECHO: 0,
+	// Make it so I can go deep inside VyOS
+	session.RequestPty("vbash --posix -s", 800, 600, ssh.TerminalModes{})
+
+	// Output for Session [Debug]
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+
+	return sshIn, err
+}
+
+func SSHConfig(in Services) *ssh.ClientConfig {
+
+	// Allow us to connect even if host is not in known_hosts file
+	hostKeyCallback := ssh.InsecureIgnoreHostKey()
+
+	// Cient Config to load into SSH
+	config := &ssh.ClientConfig{
+		User: in.GrabUsername(),
+		Auth: []ssh.AuthMethod{
+			ssh.Password(in.GrabPassword()),
+		},
+
+		HostKeyCallback: hostKeyCallback,
 	}
 
-	// Make it so I can go deep inside VyOS
-	session.RequestPty("vbash --posix -s", 1920, 1080, sshMode)
+	// Return pointer to our config
+	return config
+}
 
-	return sshIn, conn, err
+func SCPBackups(client *ssh.Client, in Services, file *os.File) error {
+
+	// Get our date n format it
+	dateParsed := parseDate()
+
+	// Create new SCP Client over our Existing SSH Connection
+	scpClient, err := scp.NewClientBySSH(client)
+	if err != nil {
+		log.Fatalf("We were unable to create the SCP connection. Error: %s", err)
+	}
+
+	// Create our context to allow timeouts and other features for our SCP functions
+	context := context.Background()
+
+	// Copy our file to the appropriate directory
+	err = scpClient.CopyFromRemote(context, file, "/home/"+in.GrabUsername()+"/"+in.GrabHostname()+"-"+dateParsed+".txt")
+	if err != nil {
+		fmt.Println("The file could not be downloaded via SCP.")
+	}
+
+	defer scpClient.Close()
+
+	return err
 }
