@@ -1,0 +1,8 @@
+package ipfstore
+
+
+func ClientFactory() {
+
+	
+
+}
